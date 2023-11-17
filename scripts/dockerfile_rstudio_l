@@ -1,0 +1,33 @@
+FROM louievdl/rstudio:4.3.2
+
+# R pkg installation too fragile - igraph needed by phyloseq (and clusterProfiler?), but not downloaded by them.
+RUN Rscript -e 'install.packages(c("BiocManager", "tidyverse", "vegan", "seriation", "openxlsx", "msigdbr", "gplots", "igraph", "rmarkdown", "plotly"), repos = "https://cloud.r-project.org")'
+RUN Rscript -e 'BiocManager::install(c("DESeq2", "edgeR", "dada2", "phyloseq", "erccdashboard"))'
+RUN Rscript -e 'BiocManager::install("clusterProfiler")' # includes DOSE,enrichplot,fgsea as dep
+RUN Rscript -e 'install.packages(c("remotes", "ggpubr", "enrichR", "Seurat", "R.utils"))' # related to single-cell analysis; Seurat should be v5
+RUN Rscript -e 'BiocManager::install(c("BiocGenerics", "DelayedArray", "DelayedMatrixStats", "limma", "lme4", "S4Vectors", "SingleCellExperiment", "SummarizedExperiment", "batchelor", "HDF5Array", "terra", "ggrastr"))'
+RUN Rscript -e 'BiocManager::install(c("org.Hs.eg.db", "org.Mm.eg.db"))'
+
+# need a token for many installs from github
+# get your own github token, put in file Renviron.txt, and copy this into the image and delete after using
+# note COPY command can't have comments behind, COPY assumes these are args to COPY; dest is a dir ending in /
+COPY Renviron.txt /root/.Renviron
+RUN Rscript -e 'remotes::install_github("satijalab/seurat-data", ref = "seurat5")'
+RUN Rscript -e 'remotes::install_github("satijalab/seurat-wrappers", ref = "seurat5")'
+RUN Rscript -e 'options(timeout = 600); remotes::install_github("satijalab/azimuth", ref = "master")' # allow extra time to download large annotation packages
+RUN Rscript -e 'remotes::install_github("cole-trapnell-lab/monocle3")' # purpose is to find a pseudotime trajectory in data.
+RUN rm /root/.Renviron
+
+# load self-made annotation libs, which require AnnotationDbi, already installed as a prereq for packages above - note these zipfiles have to be in the folder where the docker command is run
+# Docker: When using COPY with more than one source file, the destination must be a directory and end with a /
+COPY org.Calbicans.eg.db.zip org.Osativa.eg.db.zip org.Xtropicalis.eg.db.zip ./
+RUN unzip ./org.Calbicans.eg.db.zip && unzip ./org.Osativa.eg.db.zip && unzip ./org.Xtropicalis.eg.db.zip
+RUN Rscript -e 'install.packages("./org.Calbicans.eg.db", repos=NULL); install.packages("./org.Osativa.eg.db", repos=NULL); install.packages("./org.Xtropicalis.eg.db", repos=NULL); library(org.Calbicans.eg.db); library(org.Osativa.eg.db); library(org.Xtropicalis.eg.db); sessionInfo()'
+RUN rm -r ./org.Calbicans.eg.db.zip ./org.Osativa.eg.db.zip ./org.Xtropicalis.eg.db.zip ./org.Calbicans.eg.db ./org.Osativa.eg.db ./org.Xtropicalis.eg.db
+
+RUN Rscript -e 'library(tidyverse); library(seriation); library(vegan); library(dada2); library(phyloseq); library(DESeq2); library(erccdashboard); sessionInfo()'
+RUN Rscript -e 'library(edgeR); library(openxlsx); library(msigdbr); library(gplots); library(edgeR); library(clusterProfiler); library(DOSE); library(enrichplot); sessionInfo()'
+RUN Rscript -e 'library(Seurat); library(SeuratObject); library(SeuratData); library(Azimuth); library(monocle3); library(batchelor); sessionInfo()'
+
+CMD rstudio --no-sandbox
+

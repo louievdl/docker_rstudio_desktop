@@ -1,0 +1,45 @@
+
+# create repo
+git clone https://github.com/louievdl/docker_rstudio_desktop.git
+cd docker_rstudio_desktop/scripts
+
+# 20231116 updated
+# get & run docker
+sudo apt update && sudo apt install docker.io
+sudo dockerd & # start the service
+
+# building/saving/loading - 'build' is deprecated, use buildx in future
+# build an image, stored under hex name in /var/lib/docker; does not load the image into a container
+sudo docker build -t louievdl/rstudio:4.3.2 -f dockerfile_rstudio --shm-size=64m . # r 4.3 compatible with newer erccdashboard
+sudo docker save --output ../../louievdl_rstudio_432.tar louievdl/rstudio:4.3.2 # save image to tar file
+sudo docker load -i ../../louievdl_rstudio_432.tar # load a tar file into image list
+sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_432.tar
+chmod a+r ../../louievdl_rstudio_432.tar
+singularity build ../../louievdl_rstudio_432.sif docker-archive://../../louievdl_rstudio_432.tar # convert to singularity, success
+# running day to day
+#sudo docker run --user $(id -u):$(id -g) --device /dev/dri/ --rm --net host -e "XDG_RUNTIME_DIR" -e "HOME" -e "DISPLAY" -e PWD=$PWD -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:$HOME:rw -v $(pwd):$(pwd) louievdl/rstudio:4.3.2 # not working under Windows WSL/Ubuntu 20.04
+# run as singularity
+singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix,$HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_432.sif
+
+# 20231117 create github repo
+# building from Rstudio-only bit by bit:
+step 1: FROM louievdl/rstudio:4.3.2
+step 2: uncomment a portion of dockerfile_rstudio_l
+step 3: sudo docker build -t louievdl/rstudio:4.3.2l2 -f dockerfile_rstudio_l --shm-size=64m .
+step 4: sudo docker rmi louievdl/rstudio:4.3.2l # if necessary
+step 5: sudo docker tag louievdl/rstudio:4.3.2l2 louievdl/rstudio:4.3.2l
+step 6: sudo docker rmi louievdl/rstudio:4.3.2l2 # if necessary
+step 7: in dockerfile_rstudio_l, FROM louievdl/rstudio:4.3.2l # if necessary
+step 8: back to step 2 if necessary
+
+# add R libraries and create a new image
+sudo docker build -t louievdl/rstudio:4.3.2l -f dockerfile_rstudio_l --shm-size=64m .
+sudo docker save --output ../../louievdl_rstudio_432l.tar louievdl/rstudio:4.3.2l
+sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_432l.tar
+chmod a+r ../../louievdl_rstudio_432l.tar
+singularity build ../../louievdl_rstudio_432l.sif docker-archive://../../louievdl_rstudio_432l.tar
+singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix,$HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_432l.sif
+
+# use the image with libs headless, in practice include --bind options
+singularity exec --no-home ../../louievdl_rstudio_432l.sif Rscript -e 'Args <- commandArgs(T); print(Args[1]); library(Seurat); sessionInfo()' Hello
+
