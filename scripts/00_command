@@ -16,8 +16,8 @@ sudo docker load -i ../../louievdl_rstudio_432.tar # load a tar file into image 
 sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_432.tar
 chmod a+r ../../louievdl_rstudio_432.tar
 singularity build ../../louievdl_rstudio_432.sif docker-archive://../../louievdl_rstudio_432.tar # convert to singularity, success
-# running day to day
-#sudo docker run --user $(id -u):$(id -g) --device /dev/dri/ --rm --net host -e "XDG_RUNTIME_DIR" -e "HOME" -e "DISPLAY" -e PWD=$PWD -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:$HOME:rw -v $(pwd):$(pwd) louievdl/rstudio:4.3.2 # not working under Windows WSL/Ubuntu 20.04
+# running day to day on linux laptop
+#sudo docker run --user $(id -u):$(id -g) --device /dev/dri/ --rm --net host -e "XDG_RUNTIME_DIR" -e "HOME" -e "DISPLAY" -e PWD=$PWD -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:$HOME:rw -v $(pwd):$(pwd) louievdl/rstudio:4.3.2 # dri -> dxg under WSL/Ubuntu 20.04, but still fails
 # run as singularity
 singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix,$HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_432.sif
 
