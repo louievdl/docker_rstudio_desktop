@@ -16,6 +16,7 @@ RUN Rscript -e 'remotes::install_github("satijalab/seurat-data", ref = "seurat5"
 RUN Rscript -e 'remotes::install_github("satijalab/seurat-wrappers", ref = "seurat5")'
 RUN Rscript -e 'options(timeout = 600); remotes::install_github("satijalab/azimuth", ref = "master")' # allow extra time to download large annotation packages
 RUN Rscript -e 'remotes::install_github("cole-trapnell-lab/monocle3")' # purpose is to find a pseudotime trajectory in data.
+RUN Rscript -e 'remotes::install_github("mikemc/speedyseq")' # better alternative functions to phyloseq
 RUN rm /root/.Renviron
 
 # load self-made annotation libs, which require AnnotationDbi, already installed as a prereq for packages above - note these zipfiles have to be in the folder where the docker command is run
@@ -24,6 +25,9 @@ COPY org.Calbicans.eg.db.zip org.Osativa.eg.db.zip org.Xtropicalis.eg.db.zip ./
 RUN unzip ./org.Calbicans.eg.db.zip && unzip ./org.Osativa.eg.db.zip && unzip ./org.Xtropicalis.eg.db.zip
 RUN Rscript -e 'install.packages("./org.Calbicans.eg.db", repos=NULL); install.packages("./org.Osativa.eg.db", repos=NULL); install.packages("./org.Xtropicalis.eg.db", repos=NULL); library(org.Calbicans.eg.db); library(org.Osativa.eg.db); library(org.Xtropicalis.eg.db); sessionInfo()'
 RUN rm -r ./org.Calbicans.eg.db.zip ./org.Osativa.eg.db.zip ./org.Xtropicalis.eg.db.zip ./org.Calbicans.eg.db ./org.Osativa.eg.db ./org.Xtropicalis.eg.db
+
+# libs for nonparametric multifactorial anovas for 16S analysis of alpha diversity measures
+RUN Rscript -e 'install.packages(c("ARTool", "emmeans", "estimability"))'
 
 RUN Rscript -e 'library(tidyverse); library(seriation); library(vegan); library(dada2); library(phyloseq); library(DESeq2); library(erccdashboard); sessionInfo()'
 RUN Rscript -e 'library(edgeR); library(openxlsx); library(msigdbr); library(gplots); library(edgeR); library(clusterProfiler); library(DOSE); library(enrichplot); sessionInfo()'
