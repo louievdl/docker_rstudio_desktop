@@ -1,4 +1,9 @@
-FROM louievdl/rstudio:4.3.2
+FROM louievdl/rstudio:4.5.0
+
+# check R version, now need to specify bioc version
+ENV R_BIOC_VERSION="3.21"
+#RUN echo $(R --version)
+#RUN echo $R_BIOC_VERSION
 
 # R pkg installation too fragile - igraph needed by phyloseq (and clusterProfiler?), but not downloaded by them.
 RUN Rscript -e 'install.packages(c("BiocManager", "tidyverse", "vegan", "seriation", "openxlsx", "msigdbr", "gplots", "igraph", "rmarkdown", "plotly"), repos = "https://cloud.r-project.org")'
@@ -11,13 +16,18 @@ RUN Rscript -e 'BiocManager::install(c("org.Hs.eg.db", "org.Mm.eg.db"))'
 # need a token for many installs from github
 # get your own github token, put in file Renviron.txt, and copy this into the image and delete after using
 # note COPY command can't have comments behind, COPY assumes these are args to COPY; dest is a dir ending in /
-COPY Renviron.txt /root/.Renviron
+#RUN echo $(pwd)
+#COPY Renviron.txt /root/.Renviron
+#RUN echo $(whoami)
+#RUN echo $HOME
+#RUN ls -al $HOME
 RUN Rscript -e 'remotes::install_github("satijalab/seurat-data", ref = "seurat5")'
 RUN Rscript -e 'remotes::install_github("satijalab/seurat-wrappers", ref = "seurat5")'
 RUN Rscript -e 'options(timeout = 600); remotes::install_github("satijalab/azimuth", ref = "master")' # allow extra time to download large annotation packages
 RUN Rscript -e 'remotes::install_github("cole-trapnell-lab/monocle3")' # purpose is to find a pseudotime trajectory in data.
 RUN Rscript -e 'remotes::install_github("mikemc/speedyseq")' # better alternative functions to phyloseq
-RUN rm /root/.Renviron
+RUN Rscript -e 'remotes::install_github("FrederickHuangLin/ANCOMBC@bugfix")' # for ANCOM, use bugfix which requires R4.5.0 and implements interaction terms
+#RUN rm /root/.Renviron
 
 # load self-made annotation libs, which require AnnotationDbi, already installed as a prereq for packages above - note these zipfiles have to be in the folder where the docker command is run
 # Docker: When using COPY with more than one source file, the destination must be a directory and end with a /
@@ -29,9 +39,30 @@ RUN rm -r ./org.Calbicans.eg.db.zip ./org.Osativa.eg.db.zip ./org.Xtropicalis.eg
 # libs for nonparametric multifactorial anovas for 16S analysis of alpha diversity measures
 RUN Rscript -e 'install.packages(c("ARTool", "emmeans", "estimability"))'
 
+# for GeoMx
+RUN Rscript -e 'BiocManager::install(c("GeomxTools"))'
+RUN Rscript -e 'install.packages(c("networkD3", "ggforce", "reshape2", "umap", "Rtsne", "pheatmap", "GGally", "ggplot2", "ggstats", "ggthemes", "lmerTest", "nortest"), repos = "https://cloud.r-project.org")' # ggplot2 from tidyverse not recognised
+RUN Rscript -e 'remotes::install_github("davidsjoberg/ggsankey")'
+
+# for existing nCounter analysis in addition to existing libraries
+RUN Rscript -e 'BiocManager::install(c("NanoTube", "ComplexHeatmap", "pathview"))'
+# nanostring for QC, norm, and batch correction; ruv for removingunwanted variation; viridis for colur-blind friendliness; gridExtra for arranging grid-based plots; reshape2 for restructuring and aggregating data; kableExtra for more complex html tables.
+RUN Rscript -e 'install.packages(c("nanostringr", "ruv", "viridis", "gridExtra", "reshape2", "kableExtra"))'
+
+# for misc reasons
+RUN Rscript -e 'BiocManager::install(c("AnnotationForge"))'
+RUN Rscript -e 'install.packages(c("MCL", "lemon", "Rmisc"))'
+
+# clean up
+RUN rm -rf /tmp/* ~/.cache/BiocFileCache
+
+# test loading
 RUN Rscript -e 'library(tidyverse); library(seriation); library(vegan); library(dada2); library(phyloseq); library(DESeq2); library(erccdashboard); sessionInfo()'
 RUN Rscript -e 'library(edgeR); library(openxlsx); library(msigdbr); library(gplots); library(edgeR); library(clusterProfiler); library(DOSE); library(enrichplot); sessionInfo()'
 RUN Rscript -e 'library(Seurat); library(SeuratObject); library(SeuratData); library(Azimuth); library(monocle3); library(batchelor); sessionInfo()'
+RUN Rscript -e 'library(GeomxTools); library(dplyr); library(ggforce); library(networkD3); library(scales); library(reshape2); library(cowplot); library(umap); library(Rtsne); library(ggsankey); library(ggplotify); library(ggpubr); sessionInfo()' # test for GeoMx
+RUN Rscript -e 'library(NanoTube); library(ComplexHeatmap); library(pathview); library(nanostringr); library(ruv); library(viridis); library(gridExtra); library(reshape2); library(kableExtra); sessionInfo()' # test for nCounter
 
 CMD rstudio --no-sandbox
+
 

@@ -1,45 +1,55 @@
+# Running on a MobaXterm terminal under Windows 11, WSL2 Ubuntu 24.04
 
-# create repo
-git clone https://github.com/louievdl/docker_rstudio_desktop.git
-cd docker_rstudio_desktop/scripts
 
-# 20231116 updated
-# get & run docker
-sudo apt update && sudo apt install docker.io
-sudo dockerd & # start the service
+## 0. INTALL DOCKER AND APPTAINER
 
-# building/saving/loading - 'build' is deprecated, use buildx in future
-# build an image, stored under hex name in /var/lib/docker; does not load the image into a container
-sudo docker build -t louievdl/rstudio:4.3.2 -f dockerfile_rstudio --shm-size=64m . # r 4.3 compatible with newer erccdashboard
-sudo docker save --output ../../louievdl_rstudio_432.tar louievdl/rstudio:4.3.2 # save image to tar file
-sudo docker load -i ../../louievdl_rstudio_432.tar # load a tar file into image list
-sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_432.tar
-chmod a+r ../../louievdl_rstudio_432.tar
-singularity build ../../louievdl_rstudio_432.sif docker-archive://../../louievdl_rstudio_432.tar # convert to singularity, success
-# running day to day on linux laptop
-#sudo docker run --user $(id -u):$(id -g) --device /dev/dri/ --rm --net host -e "XDG_RUNTIME_DIR" -e "HOME" -e "DISPLAY" -e PWD=$PWD -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME:$HOME:rw -v $(pwd):$(pwd) louievdl/rstudio:4.3.2 # dri -> dxg under WSL/Ubuntu 20.04, but still fails
-# run as singularity
-singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix,$HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_432.sif
+sudo snap install docker
+sudo snap enable docker
+sudo snap start docker
+docker --version
+#Docker version 28.1.1, build 068a01e
 
-# 20231117 create github repo
-# building from Rstudio-only bit by bit:
-step 1: FROM louievdl/rstudio:4.3.2
-step 2: uncomment a portion of dockerfile_rstudio_l
-step 3: sudo docker build -t louievdl/rstudio:4.3.2l2 -f dockerfile_rstudio_l --shm-size=64m .
-step 4: sudo docker rmi louievdl/rstudio:4.3.2l # if necessary
-step 5: sudo docker tag louievdl/rstudio:4.3.2l2 louievdl/rstudio:4.3.2l
-step 6: sudo docker rmi louievdl/rstudio:4.3.2l2 # if necessary
-step 7: in dockerfile_rstudio_l, FROM louievdl/rstudio:4.3.2l # if necessary
-step 8: back to step 2 if necessary
+sudo add-apt-repository -y ppa:apptainer/ppa
+sudo apt update
+sudo apt install -y apptainer
+apptainer --version
+#apptainer version 1.3.4
 
-# add R libraries and create a new image
-sudo docker build -t louievdl/rstudio:4.3.2l -f dockerfile_rstudio_l --shm-size=64m .
-sudo docker save --output ../../louievdl_rstudio_432l.tar louievdl/rstudio:4.3.2l
-sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_432l.tar
-chmod a+r ../../louievdl_rstudio_432l.tar
-singularity build ../../louievdl_rstudio_432l.sif docker-archive://../../louievdl_rstudio_432l.tar
-singularity run --bind /tmp/.X11-unix:/tmp/.X11-unix,$HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_432l.sif
+## 1. BUILD INITIAL DOCKER IMAGE WITH SUPPORTING MACHINE LIBRARIES, BUT ONLY BASIC R LIBRARIES
 
-# use the image with libs headless, in practice include --bind options
-singularity exec --no-home ../../louievdl_rstudio_432l.sif Rscript -e 'Args <- commandArgs(T); print(Args[1]); library(Seurat); sessionInfo()' Hello
+vi dockerfile_rstudio
+sudo docker build -t louievdl/rstudio:4.5.0 -f dockerfile_rstudio --shm-size=64m .
 
+# try running rstudio from docker image
+sudo docker run --rm   --mount type=bind,src=$HOME,dst=$HOME,readonly=false,bind-propagation=rprivate   --mount type=bind,src=$(pwd),dst=$(pwd),readonly=false,bind-propagation=rprivate   --mount type=bind,src=$HOME/.Xauthority,dst=$HOME/.Xauthority,readonly=true  --mount type=bind,src=/tmp/.X11-unix,dst=/tmp/.X11-unix,readonly=true --mount type=bind,src=/run/dbus/system_bus_socket,dst=/run/dbus/system_bus_socket,readonly=false --user 0:0   --env DISPLAY=localhost:10.0   --net=host   louievdl/rstudio:4.5.0 rstudio --no-sandbox
+# MoTTY X11 proxy: Unsupported authorisation protocol
+# [1:0612/075814.219309:ERROR:ozone_platform_x11.cc(246)] Missing X server or $DISPLAY
+# [1:0612/075814.219421:ERROR:env.cc(257)] The platform failed to initialize.  Exiting.
+
+# save as a tar archive
+sudo docker save --output ../../louievdl_rstudio_450.tar louievdl/rstudio:4.5.0
+sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_450.tar
+sudo chmod a+r ../../louievdl_rstudio_450.tar
+
+# convert to apptainer/singularity image - note, binding of .X11-unix is Windows/WSL2/Ubuntu-24.04 specific but may not be necessary
+apptainer build ../../louievdl_rstudio_450.sif docker-archive://../../louievdl_rstudio_450.tar
+apptainer exec --bind /tmp/.X11-unix:/tmp/.X11-unix --bind $HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_450.sif /bin/bash # rstudio --no-sandbox # success
+apptainer run --bind /tmp/.X11-unix:/tmp/.X11-unix --bind $HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_450.sif # success opening Rstudio
+# other variants:
+apptainer run --bind /tmp/.X11-unix:/tmp/.X11-unix --bind $HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY --env QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu" ../../louievdl_rstudio_450.sif # disabling gpu use by chromium, the web browser context in which Rstudio runs
+apptainer run --bind $HOME:$HOME:rw,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_450.sif # neglecting binding the .X11-unix # minimal but successful
+
+
+## 2. BUILD R LIBRARIES INTO IMAGE
+
+vi dockerfile_rstudio_l
+sudo docker build -t louievdl/rstudio:4.5.0l -f dockerfile_rstudio_l --shm-size=64m .
+sudo docker save --output ../../louievdl_rstudio_450l.tar louievdl/rstudio:4.5.0l
+sudo chown $(id -u):$(id -g) ../../louievdl_rstudio_450l.tar
+chmod a+r ../../louievdl_rstudio_450l.tar
+apptainer build ../../louievdl_rstudio_450l.sif docker-archive://../../louievdl_rstudio_450l.tar
+apptainer run --bind $(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_450l.sif # skip binding to .X11-unix, works under Windows 11 WSL2, but generates more error messages
+apptainer run --bind /tmp/.X11-unix:/tmp/.X11-unix,$(pwd):$(pwd):rw,/run --pwd $(pwd) --home $HOME --env DISPLAY=$DISPLAY ../../louievdl_rstudio_450l.sif # to bind the Windows 11 WSL2 Ubuntu 24.04 .X11-unix to the expected location in the image
+
+
+# NOTE: in --mount or --bind options orientation of dirs is always host-dir,image-dir

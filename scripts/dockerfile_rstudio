@@ -1,54 +1,57 @@
-FROM ubuntu:jammy
-# official repo
-# output to local image louievdl/rstudio:4.3.2
+FROM ubuntu:24.04
 
 # prevent hangs due to tzdata setup
 ENV TZ=Europe/London
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# prepare for updated R
-RUN apt update && \
-    apt install -y lsb-release wget && \
-    apt install -y --no-install-recommends software-properties-common dirmngr
-
-# get keys
-RUN wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-RUN gpg --show-keys /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-RUN add-apt-repository -y "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
-
-# get R
-RUN apt install -y r-base r-base-dev r-recommended r-cran-systemfonts wget libgbm1 # wget needs reinstallation?
-
-# deps due to failure to run rstudio from successful image. not sure if hdf5-tools is necessary
-RUN apt install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-        libdrm2 libgtk-3-0 libgbm1 libasound2 libssl-dev curl libcurl4-gnutls-dev hdf5-tools libhdf5-dev
-
-# excess libs rqd for single-cell analysis
-RUN apt install -y libxml2-dev libgsl-dev libudunits2-dev libgsl-dev \
+# Install R, RStudio Desktop, D-Bus, and X11 dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    dbus-x11 \
+    libxtst6 \
+    libx11-xcb1 \
+    libgl1 \
+    libqt5widgets5 \
+    libqt5gui5 \
+    libqt5core5a && \
+    # various packages
+    apt install -y --no-install-recommends software-properties-common dirmngr && \
+    # Install R
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9 && \
+    echo "deb https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/" >> /etc/apt/sources.list && \
+    apt-get update && apt-get install -y r-base r-base-dev r-recommended r-cran-systemfonts && \
+    # packagees required to make rstudio run
+    apt-get install -y wget libgbm1 libnss3 libasound2t64 && \
+    # packages for single cell analysis
+    apt install -y libxml2-dev libgsl-dev libudunits2-dev libgsl-dev \
         libudunits2-dev libfontconfig-dev libcairo2-dev libgdal-dev cmake \
-        libpng-dev libtiff5-dev libjpeg-dev libharfbuzz-dev libfribidi-dev
+        libpng-dev libtiff5-dev libjpeg-dev libharfbuzz-dev libfribidi-dev hdf5-tools libhdf5-dev && \
+    # lib for ancombc2 - gnu multiple precision lib, for arb precision arithmetic, libgmp10 already loaded
+    apt install -y libgmp-dev
 
-RUN R --version
 
-# test sufficiency of system packages as reqs for further package installs
-# R pkg installation too fragile - igraph needed by phyloseq (and clusterProfiler?), but not downloaded by them.
-#RUN Rscript -e 'install.packages(c("BiocManager", "tidyverse", "vegan", "seriation", "openxlsx", "msigdbr", "gplots", "igraph", "plotly"), repos = "https://cloud.r-project.org")'
-#RUN Rscript -e 'BiocManager::install(c("DESeq2", "edgeR", "dada2", "phyloseq", "erccdashboard"))'
-#RUN Rscript -e 'BiocManager::install("erccdashboard")'
-#RUN Rscript -e 'BiocManager::install("clusterProfiler")' # includes DOSE,enrichplot,fgsea as dep
-#RUN Rscript -e 'library(tidyverse); library(seriation); library(vegan); library(dada2); library(phyloseq); library(DESeq2); library(erccdashboard); sessionInfo()'
-#RUN Rscript -e 'library(edgeR); library(openxlsx); library(msigdbr); library(gplots); library(edgeR); library(clusterProfiler); library(DOSE); library(enrichplot); sessionInfo()'
-
-# get Rstudio
-# RUN wget https://download1.rstudio.org/electron/jammy/amd64/rstudio-2022.12.0-353-amd64.deb
-# RUN apt install -y ./rstudio-2022.12.0-353-amd64.deb
-# RUN rm ./rstudio-2022.12.0-353-amd64.deb
-RUN wget https://download1.rstudio.org/electron/jammy/amd64/rstudio-2023.09.1-494-amd64.deb
-RUN apt install -y ./rstudio-2023.09.1-494-amd64.deb
-RUN rm ./rstudio-2023.09.1-494-amd64.deb
+# Install RStudio Desktop - current version of rstudio still at 'jammy' link
+RUN wget https://download1.rstudio.org/electron/jammy/amd64/rstudio-2025.05.1-513-amd64.deb
+RUN apt-get install -y ./rstudio-2025.05.1-513-amd64.deb
+RUN rm ./rstudio-2025.05.1-513-amd64.deb
+#RUN apt update --fix-missing # update the package list without errors due to missing deps
+#RUN apt install -f # install missing packages
 
 RUN apt-get clean
+RUN rm -rf /var/lib/apt/lists/*
+RUN which rstudio
 
-CMD rstudio --no-sandbox
+# Create a user matching the host UID/GID
+#ARG UID=1000
+#ARG GID=1000
+#ARG USER=rstudio
+#RUN groupadd -g ${GID} ${USER} && \
+#    useradd -u ${UID} -g ${GID} -m -s /bin/bash ${USER}
 
+# Create D-Bus system bus directory
+RUN mkdir -p /var/run/dbus
+
+# Start RStudio Desktop
+CMD rstudio --no-sandbox #/init as a command does not work
 
