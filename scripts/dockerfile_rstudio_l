@@ -50,7 +50,7 @@ RUN Rscript -e 'BiocManager::install(c("NanoTube", "ComplexHeatmap", "pathview")
 RUN Rscript -e 'install.packages(c("nanostringr", "ruv", "viridis", "gridExtra", "reshape2", "kableExtra"))'
 
 # for misc reasons
-RUN Rscript -e 'BiocManager::install(c("AnnotationForge"))'
+RUN Rscript -e 'BiocManager::install(c("AnnotationForge", "AnnotationHub", "interactiveDisplayBase", "microbiome"))' # AnnotationHub depends on BiocFileCache & filelock; interactiveDisplayBase for shiny apps
 RUN Rscript -e 'install.packages(c("MCL", "lemon", "Rmisc"))'
 
 # clean up
